@@ -1,0 +1,25 @@
+# Next.js
+node_modules/
+.next/
+.env*.local
+.env.production
+.vercel
+*.tsbuildinfo
+next-env.d.ts
+
+# Editor / OS
+.vscode/*
+!.vscode/settings.json
+.vs/
+.history/
+.idea/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# ── 보안: 비밀 키는 절대 커밋하지 않는다 ───────────────────
+# ANTHROPIC_API_KEY 등 서버 전용 시크릿은 .env.local / .env.production 에만 존재하며
+# 위 .env*.local · .env.production 규칙으로 git 추적에서 제외된다.
+# (.env.example 만 커밋되어 어떤 변수가 필요한지 문서화한다)
