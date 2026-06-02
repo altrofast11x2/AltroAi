@@ -93,6 +93,36 @@
       ".write": true
     },
 
+    "dash_users": {
+      ".read": true,
+      ".write": true,
+      ".indexOn": ["email", "createdAt"]
+    },
+    "dash_datasets": {
+      "$uid": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["createdAt"]
+      }
+    },
+    "dash_records": {
+      "$uid": {
+        "$dsId": {
+          ".read": true,
+          ".write": true,
+          ".indexOn": ["date", "createdAt"]
+        }
+      }
+    },
+    "dash_layout": {
+      ".read": true,
+      ".write": true
+    },
+    "dash_settings": {
+      ".read": true,
+      ".write": true
+    },
+
     "ai_users": {
       ".read": true,
       ".write": true,
