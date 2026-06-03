@@ -13,7 +13,7 @@
 //   · 입력 검증 + 간단한 IP 레이트리밋.
 // ───────────────────────────────────────────────────────────────────────────
 import Anthropic from '@anthropic-ai/sdk';
-import { getStableSystem, KNOWLEDGE_INSTRUCTION } from './personaPrompts';
+import { getStableSystem, KNOWLEDGE_INSTRUCTION, OWNER_SYSTEM, VISITOR_GUARD } from './personaPrompts';
 import { retrieve, formatKnowledge, docsByIds } from '@/lib/rag';
 
 export const runtime = 'nodejs';
@@ -24,6 +24,11 @@ const OPENAI_BASE = (process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1')
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const OLLAMA_BASE = (process.env.OLLAMA_BASE_URL || 'http://localhost:11434').replace(/\/+$/, '');
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'llama3.2';
+
+// 주인장(사이트 개발자) 식별 — 이 계정만 보안 주제 제한이 풀린다.
+const OWNER_EMAIL = (process.env.OWNER_EMAIL || 'altrofast11x2@email.com').trim().toLowerCase();
+// OWNER_SECRET 을 설정하면 이메일 + 코드 둘 다 맞아야 주인장 인정(이메일 스푸핑 방지). 미설정 시 이메일만 확인.
+const OWNER_SECRET = process.env.OWNER_SECRET || '';
 
 // 입력 제한 (오남용/비용 폭주 방지)
 const MAX_MESSAGES = 24;
@@ -133,6 +138,12 @@ export async function POST(req: Request) {
     return jsonError('보낼 메시지가 없습니다.', 400);
   }
 
+  // 주인장 식별 — 이메일 일치(+OWNER_SECRET 설정 시 코드까지). 그 외엔 방문자 보안 필터 적용.
+  const email = String(body?.email || '').trim().toLowerCase();
+  const ownerSecret = typeof body?.ownerSecret === 'string' ? body.ownerSecret : '';
+  const isOwner = !!OWNER_EMAIL && email === OWNER_EMAIL && (OWNER_SECRET ? ownerSecret === OWNER_SECRET : true);
+  const accessGuard = isOwner ? OWNER_SYSTEM : VISITOR_GUARD;
+
   // RAG
   const lastUser = messages[messages.length - 1].content;
   let hits = retrieve(lastUser, 4).map(h => h.doc);
@@ -142,20 +153,21 @@ export async function POST(req: Request) {
   const stable = getStableSystem(personaId);
   const knowledgeBlock = knowledgeText ? `${KNOWLEDGE_INSTRUCTION}\n\n${knowledgeText}` : '';
 
-  if (provider === 'claude') return streamClaude(stable, knowledgeBlock, messages);
+  if (provider === 'claude') return streamClaude(stable, accessGuard, knowledgeBlock, messages);
 
   // openai / ollama 는 단일 system 메시지로 합쳐 전달
-  const systemText = `${stable}${knowledgeBlock ? '\n\n' + knowledgeBlock : ''}`;
+  const systemText = [stable, accessGuard, knowledgeBlock].filter(Boolean).join('\n\n');
   return provider === 'openai'
     ? streamOpenAI(systemText, messages)
     : streamOllama(systemText, messages);
 }
 
 // ── Claude (Anthropic SDK, 스트리밍 + 프롬프트 캐싱) ─────────────────────────
-function streamClaude(stable: string, knowledgeBlock: string, messages: ChatMsg[]) {
+function streamClaude(stable: string, accessGuard: string, knowledgeBlock: string, messages: ChatMsg[]) {
   const system: Anthropic.TextBlockParam[] = [
     { type: 'text', text: stable, cache_control: { type: 'ephemeral' } },
   ];
+  if (accessGuard) system.push({ type: 'text', text: accessGuard });
   if (knowledgeBlock) system.push({ type: 'text', text: knowledgeBlock });
 
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY! });

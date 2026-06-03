@@ -25,6 +25,7 @@ export default function SettingsPage() {
   const [voiceOut, setVoiceOut] = useState(false);
   const [voiceLang, setVoiceLang] = useState('ko-KR');
   const [defaultPersona, setDefaultPersona] = useState(PERSONAS[0].id);
+  const [ownerSecret, setOwnerSecret] = useState('');
 
   const recSupported = isRecognitionSupported();
   const synthSupported = isSynthesisSupported();
@@ -37,6 +38,7 @@ export default function SettingsPage() {
       setVoiceOut(localStorage.getItem('altroai_voiceout') === '1');
       setVoiceLang(localStorage.getItem('altroai_voicelang') || 'ko-KR');
       setDefaultPersona(localStorage.getItem('altroai_persona') || PERSONAS[0].id);
+      setOwnerSecret(localStorage.getItem('altroai_owner_secret') || '');
     } catch {}
   }, []);
 
@@ -72,6 +74,10 @@ export default function SettingsPage() {
     setDefaultPersona(p);
     persist('altroai_persona', p);
     syncFirebase({ defaultPersona: p });
+  };
+  const onOwnerSecret = (v: string) => {
+    setOwnerSecret(v);
+    persist('altroai_owner_secret', v); // 서버로 전송돼 OWNER_SECRET 과 대조됨 (계정에는 저장 안 함)
   };
 
   return (
@@ -157,6 +163,26 @@ export default function SettingsPage() {
           })}
         </div>
       </div>
+
+      {/* 주인장 모드 (선택적 하드닝) */}
+      {user && (
+        <div className="db-card">
+          <h3>주인장 모드</h3>
+          <div className="hint">
+            사이트 주인장 전용. 주인장은 보안 공부(취약점·모의해킹·CTF 등) 질문 제한이 풀립니다.
+            기본은 <strong>주인장 이메일</strong>만으로 인식되며, 서버에 <code>OWNER_SECRET</code> 을 설정한 경우 같은 코드를 아래에 입력해야 인증됩니다(이메일 스푸핑 방지).
+          </div>
+          <div className="db-toggle-row">
+            <div className="db-toggle-text">
+              <strong>주인장 인증 코드</strong>
+              <small>선택 — 서버 <code>OWNER_SECRET</code> 과 동일하게</small>
+            </div>
+            <input type="password" className="db-input" value={ownerSecret}
+              onChange={e => onOwnerSecret(e.target.value)} placeholder="코드 (선택)"
+              autoComplete="off" style={{ maxWidth: 180 }} />
+          </div>
+        </div>
+      )}
 
       <div className="bj-notice">
         설정은 이 브라우저에 저장되며{user ? ', 로그인 계정에도 동기화됩니다.' : '(로그인하면 계정에도 저장됩니다).'}

@@ -187,7 +187,13 @@ export default function ChatPage() {
       const res = await fetch('/api/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ personaId: persona, messages: history.map(m => ({ role: m.role, content: m.content })) }),
+        body: JSON.stringify({
+          personaId: persona,
+          messages: history.map(m => ({ role: m.role, content: m.content })),
+          // 주인장 인식용 — 로그인 이메일 + (선택)주인장 코드. 서버가 OWNER_EMAIL 과 대조.
+          email: user?.email || '',
+          ownerSecret: (() => { try { return localStorage.getItem('altroai_owner_secret') || ''; } catch { return ''; } })(),
+        }),
         signal: abort.signal,
       });
 
