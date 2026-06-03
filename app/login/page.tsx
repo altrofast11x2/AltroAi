@@ -80,12 +80,6 @@ export default function LoginPage() {
       <button className="bj-btn bj-btn-primary bj-btn-block" onClick={submit} disabled={busy} style={{ marginTop: 6 }}>
         {busy ? '처리 중...' : (tab === 'login' ? '로그인' : '가입하기')}
       </button>
-
-      {tab === 'login' && (
-        <div className="bj-notice" style={{ textAlign: 'center' }}>
-          AltroBoard · AltroShop · AltroTodo · AltroDashBoard 계정으로도 로그인할 수 있습니다.
-        </div>
-      )}
     </main>
   );
 }

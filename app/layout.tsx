@@ -20,7 +20,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         {children}
         <footer className="bj-footer">
           AltroAi — Claude / Ollama 기반 AI 챗봇<br />
-          AltroBoard · AltroShop · AltroTodo · AltroDashBoard 통합 계정으로 로그인됩니다
+          페르소나 · 대화 저장 · 자료 참고(RAG) · 음성 입출력
         </footer>
       </body>
     </html>
