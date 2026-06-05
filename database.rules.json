@@ -144,6 +144,13 @@
         }
       }
     },
+    "ai_personas": {
+      "$uid": {
+        ".read": true,
+        ".write": true,
+        ".indexOn": ["createdAt"]
+      }
+    },
     "ai_settings": {
       ".read": true,
       ".write": true

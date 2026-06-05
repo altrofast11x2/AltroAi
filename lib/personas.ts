@@ -92,6 +92,11 @@ function saveCustomPersonas(list: CustomPersona[]) {
   try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch {}
 }
 
+// 로컬 캐시를 통째로 교체 (Firebase 동기화 결과 반영용)
+export function writeCustomPersonas(list: CustomPersona[]) {
+  saveCustomPersonas(Array.isArray(list) ? list : []);
+}
+
 export function addCustomPersona(name: string, instructions: string): CustomPersona {
   const list = getCustomPersonas();
   const nm = (name || '').slice(0, 60).trim() || '내 페르소나';

@@ -8,12 +8,13 @@ import Composer from './components/Composer';
 import { Icons as I } from './components/Icons';
 import {
   PERSONAS, getPersona, DEFAULT_PERSONA,
-  getCustomPersonas, addCustomPersona, deleteCustomPersona,
+  getCustomPersonas, addCustomPersona, deleteCustomPersona, writeCustomPersonas,
   type CustomPersona,
 } from '@/lib/personas';
 import {
   listConversations, createConversation, updateConversation, deleteConversation,
   listMessages, addMessage,
+  listPersonas, savePersona, deletePersonaRemote,
 } from '@/lib/ai';
 import { speak, cancelSpeech, isSynthesisSupported } from '@/lib/speech';
 
@@ -97,6 +98,29 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, ready]);
 
+  // 커스텀 페르소나 계정 동기화 (Firebase ↔ localStorage 합집합)
+  useEffect(() => {
+    if (!ready || !user) return;
+    let cancelled = false;
+    (async () => {
+      const local = getCustomPersonas();
+      const remote = await listPersonas(user.id);
+      if (cancelled) return;
+      const map = new Map<string, any>();
+      [...remote, ...local].forEach((p: any) => { if (p && p.id) map.set(p.id, { ...p, custom: true }); });
+      const merged = [...map.values()] as CustomPersona[];
+      writeCustomPersonas(merged);
+      setCustomPersonas(merged);
+      // 로컬에만 있던 것(동기화 전 생성)은 Firebase 로 업로드
+      const remoteIds = new Set(remote.map((p: any) => p.id));
+      for (const p of local) {
+        if (!remoteIds.has(p.id)) { try { await savePersona(user.id, p); } catch {} }
+      }
+    })();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user, ready]);
+
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
@@ -145,7 +169,7 @@ export default function ChatPage() {
   };
 
   // ── 커스텀 페르소나 ──────────────────────────────────────────────────
-  const createPersona = () => {
+  const createPersona = async () => {
     const name = cpName.trim();
     if (!name) return;
     const p = addCustomPersona(name, cpInstr);
@@ -153,12 +177,14 @@ export default function ChatPage() {
     setShowCreate(false);
     setCpName(''); setCpInstr('');
     choosePersona(p.id);
+    if (user) { try { await savePersona(user.id, p); } catch (e) { console.warn('[AltroAi] 페르소나 동기화 실패:', e); } }
   };
-  const removeCustomPersona = (id: string) => {
+  const removeCustomPersona = async (id: string) => {
     if (!confirm('이 페르소나를 삭제할까요?')) return;
     deleteCustomPersona(id);
     setCustomPersonas(getCustomPersonas());
     if (persona === id) choosePersona(DEFAULT_PERSONA);
+    if (user) { try { await deletePersonaRemote(user.id, id); } catch (e) { console.warn(e); } }
   };
 
   // 마지막(어시스턴트) 메시지에 토큰 이어붙이기
