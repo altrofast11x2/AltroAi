@@ -74,6 +74,52 @@ export const PERSONAS: Persona[] = [
 
 export const DEFAULT_PERSONA = 'study';
 
+// ── 사용자 지정(커스텀) 페르소나 — 브라우저(localStorage)에 저장 ──────────────
+export type CustomPersona = Persona & { custom: true; instructions: string };
+
+const CUSTOM_KEY = 'altroai_custom_personas';
+const CUSTOM_PALETTE = ['#8e44ad', '#16a085', '#2980b9', '#e67e22', '#c0392b', '#27ae60', '#d35400', '#9b59b6'];
+
+export function getCustomPersonas(): CustomPersona[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const arr = JSON.parse(localStorage.getItem(CUSTOM_KEY) || '[]');
+    return Array.isArray(arr) ? arr : [];
+  } catch { return []; }
+}
+
+function saveCustomPersonas(list: CustomPersona[]) {
+  try { localStorage.setItem(CUSTOM_KEY, JSON.stringify(list)); } catch {}
+}
+
+export function addCustomPersona(name: string, instructions: string): CustomPersona {
+  const list = getCustomPersonas();
+  const nm = (name || '').slice(0, 60).trim() || '내 페르소나';
+  const ins = (instructions || '').slice(0, 1000).trim();
+  const p: CustomPersona = {
+    id: 'custom_' + Date.now().toString(36),
+    name: nm,
+    tagline: ins ? ins.slice(0, 40) : '내가 만든 페르소나',
+    description: ins || `${nm} 캐릭터로 대화합니다.`,
+    greeting: `안녕하세요, 저는 ${nm} 입니다. 무엇이든 말씀해 보세요.`,
+    icon: 'Sparkles',
+    accent: CUSTOM_PALETTE[list.length % CUSTOM_PALETTE.length],
+    samples: [],
+    custom: true,
+    instructions: ins,
+  };
+  saveCustomPersonas([...list, p]);
+  return p;
+}
+
+export function deleteCustomPersona(id: string) {
+  saveCustomPersonas(getCustomPersonas().filter(p => p.id !== id));
+}
+
+export function isCustomId(id: string) {
+  return typeof id === 'string' && id.startsWith('custom_');
+}
+
 export function getPersona(id: string): Persona {
-  return PERSONAS.find(p => p.id === id) || PERSONAS[0];
+  return PERSONAS.find(p => p.id === id) || getCustomPersonas().find(p => p.id === id) || PERSONAS[0];
 }

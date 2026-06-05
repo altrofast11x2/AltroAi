@@ -1,11 +1,16 @@
 'use client';
 import { useState, useEffect, useRef, useCallback } from 'react';
+import Link from 'next/link';
 import Sidebar from './components/Sidebar';
 import PersonaPicker from './components/PersonaPicker';
 import ChatMessage from './components/ChatMessage';
 import Composer from './components/Composer';
 import { Icons as I } from './components/Icons';
-import { PERSONAS, getPersona, DEFAULT_PERSONA } from '@/lib/personas';
+import {
+  PERSONAS, getPersona, DEFAULT_PERSONA,
+  getCustomPersonas, addCustomPersona, deleteCustomPersona,
+  type CustomPersona,
+} from '@/lib/personas';
 import {
   listConversations, createConversation, updateConversation, deleteConversation,
   listMessages, addMessage,
@@ -20,6 +25,11 @@ export default function ChatPage() {
   const [aiInfo, setAiInfo] = useState<{ configured: boolean; provider?: string; model?: string } | null>(null);
 
   const [persona, setPersona] = useState<string>(DEFAULT_PERSONA);
+  const [customPersonas, setCustomPersonas] = useState<CustomPersona[]>([]);
+  const [showCreate, setShowCreate] = useState(false);
+  const [cpName, setCpName] = useState('');
+  const [cpInstr, setCpInstr] = useState('');
+
   const [conversations, setConversations] = useState<any[]>([]);
   const [convLoading, setConvLoading] = useState(false);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -35,7 +45,6 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ── 초기 로드: 사용자 세션 + UI 환경설정 + AI 키 설정 여부 ──────────────
   const readUser = useCallback(() => {
     try {
       const raw = localStorage.getItem('altroai_user');
@@ -50,6 +59,7 @@ export default function ChatPage() {
       setVoiceLang(localStorage.getItem('altroai_voicelang') || 'ko-KR');
       const p = localStorage.getItem('altroai_persona');
       if (p) setPersona(p);
+      setCustomPersonas(getCustomPersonas());
     } catch {}
     setReady(true);
 
@@ -68,7 +78,6 @@ export default function ChatPage() {
     };
   }, [readUser]);
 
-  // 로그인 사용자: 대화 목록 로드. ?c=<id> 가 있으면 해당 대화 열기.
   useEffect(() => {
     if (!ready) return;
     if (!user) { setConversations([]); setActiveConvId(null); return; }
@@ -88,13 +97,11 @@ export default function ChatPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, ready]);
 
-  // 새 메시지/토큰마다 맨 아래로 스크롤
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages]);
 
-  // 환경설정 영속화
   const toggleVoiceOut = () => {
     setVoiceOut(v => {
       const nv = !v;
@@ -128,7 +135,6 @@ export default function ChatPage() {
 
   const choosePersona = (id: string) => {
     if (messages.length > 0 || activeConvId) {
-      // 진행 중인 대화가 있으면 새 대화로 전환
       cancelSpeech(); setSpeakingIdx(null);
       setActiveConvId(null);
       setMessages([]);
@@ -136,6 +142,23 @@ export default function ChatPage() {
     }
     setPersona(id);
     try { localStorage.setItem('altroai_persona', id); } catch {}
+  };
+
+  // ── 커스텀 페르소나 ──────────────────────────────────────────────────
+  const createPersona = () => {
+    const name = cpName.trim();
+    if (!name) return;
+    const p = addCustomPersona(name, cpInstr);
+    setCustomPersonas(getCustomPersonas());
+    setShowCreate(false);
+    setCpName(''); setCpInstr('');
+    choosePersona(p.id);
+  };
+  const removeCustomPersona = (id: string) => {
+    if (!confirm('이 페르소나를 삭제할까요?')) return;
+    deleteCustomPersona(id);
+    setCustomPersonas(getCustomPersonas());
+    if (persona === id) choosePersona(DEFAULT_PERSONA);
   };
 
   // 마지막(어시스턴트) 메시지에 토큰 이어붙이기
@@ -157,31 +180,30 @@ export default function ChatPage() {
 
   // ── 전송 ──────────────────────────────────────────────────────────────
   const handleSend = async (text: string) => {
-    if (busy) return;
+    if (busy || !user) return;
     cancelSpeech(); setSpeakingIdx(null);
 
     const history = [...messages, { role: 'user' as const, content: text }];
     setMessages([...history, { role: 'assistant', content: '', pending: true }]);
 
-    // 로그인 사용자: 대화방 확보 + 질문 저장
     let convId = activeConvId;
-    if (user) {
-      try {
-        if (!convId) {
-          const conv = await createConversation(user.id, { personaId: persona, title: text });
-          convId = conv.id;
-          setActiveConvId(convId);
-          setConversations(prev => [conv, ...prev]);
-          try { window.history.replaceState(null, '', `/?c=${convId}`); } catch {}
-        }
-        await addMessage(user.id, convId!, { role: 'user', content: text });
-      } catch (e) { console.warn('[AltroAi] 질문 저장 실패:', e); }
-    }
+    try {
+      if (!convId) {
+        const conv = await createConversation(user.id, { personaId: persona, title: text });
+        convId = conv.id;
+        setActiveConvId(convId);
+        setConversations(prev => [conv, ...prev]);
+        try { window.history.replaceState(null, '', `/?c=${convId}`); } catch {}
+      }
+      await addMessage(user.id, convId!, { role: 'user', content: text });
+    } catch (e) { console.warn('[AltroAi] 질문 저장 실패:', e); }
 
     setBusy(true);
     const abort = new AbortController();
     abortRef.current = abort;
     let acc = '';
+
+    const customSel = customPersonas.find(p => p.id === persona);
 
     try {
       const res = await fetch('/api/chat', {
@@ -189,8 +211,9 @@ export default function ChatPage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           personaId: persona,
+          // 커스텀 페르소나면 이름+말투를 함께 전송 (서버가 그 캐릭터로 연기)
+          customPersona: customSel ? { name: customSel.name, instructions: customSel.instructions } : undefined,
           messages: history.map(m => ({ role: m.role, content: m.content })),
-          // 주인장 인식용 — 로그인 이메일 + (선택)주인장 코드. 서버가 OWNER_EMAIL 과 대조.
           email: user?.email || '',
           ownerSecret: (() => { try { return localStorage.getItem('altroai_owner_secret') || ''; } catch { return ''; } })(),
         }),
@@ -225,28 +248,23 @@ export default function ChatPage() {
     setBusy(false);
     abortRef.current = null;
 
-    // 답변 저장 + 대화 메타 갱신
-    if (user && convId && acc) {
+    if (convId && acc) {
       try {
         await addMessage(user.id, convId, { role: 'assistant', content: acc });
-        const patch = {
-          updatedAt: new Date().toISOString(),
-          lastMessage: acc.slice(0, 120),
-        };
+        const patch = { updatedAt: new Date().toISOString(), lastMessage: acc.slice(0, 120) };
         await updateConversation(user.id, convId, patch);
         setConversations(prev => {
           const idx = prev.findIndex(c => c.id === convId);
           if (idx < 0) return prev;
           const updated = { ...prev[idx], ...patch };
           const rest = prev.filter(c => c.id !== convId);
-          return [updated, ...rest]; // 최근 대화 맨 위로
+          return [updated, ...rest];
         });
       } catch (e) { console.warn('[AltroAi] 답변 저장 실패:', e); }
     }
 
-    // 음성 자동 출력
     if (voiceOut && synthSupported && acc) {
-      const idx = history.length; // 방금 추가된 어시스턴트 메시지의 인덱스
+      const idx = history.length;
       setSpeakingIdx(idx);
       speak(acc, { lang: voiceLang, onEnd: () => setSpeakingIdx(s => (s === idx ? null : s)) });
     }
@@ -273,32 +291,59 @@ export default function ChatPage() {
   };
 
   const activePersona = getPersona(persona);
+  const allPersonas = [...PERSONAS, ...customPersonas];
+
+  // 로딩 중(세션 확인 전) — 깜빡임 방지
+  if (!ready) return <main className="ai-shell"><section className="ai-main" /></main>;
+
+  // ── 로그인 게이트: 비로그인은 채팅 불가 ──────────────────────────────────
+  if (!user) {
+    return (
+      <main className="ai-shell">
+        <section className="ai-main">
+          <div className="ai-scroll">
+            <div className="ai-welcome">
+              <div className="ai-welcome-hero">
+                <div className="ai-welcome-badge"><I.Sparkles width={15} height={15} /> AltroAi</div>
+                <h1 className="ai-welcome-title">로그인하고 시작하세요</h1>
+                <p className="ai-welcome-sub">AltroAi 챗봇은 로그인 후 이용할 수 있어요.<br />대화 내역이 저장되고, 나만의 페르소나도 만들 수 있습니다.</p>
+              </div>
+              <div className="ai-gate-actions">
+                <Link href="/login" className="bj-btn bj-btn-primary"><I.Login width={16} height={16} /> 로그인 / 회원가입</Link>
+              </div>
+              <div className="ai-gate-features">
+                <span><I.Chat width={14} height={14} /> 4가지 페르소나 + 직접 만들기</span>
+                <span><I.History width={14} height={14} /> 대화 내역 저장·조회</span>
+                <span><I.Mic width={14} height={14} /> 음성 입력/출력</span>
+              </div>
+            </div>
+          </div>
+        </section>
+      </main>
+    );
+  }
 
   return (
-    <main className={`ai-shell ${user ? 'with-side' : ''}`}>
-      {user && (
-        <Sidebar
-          conversations={conversations}
-          activeId={activeConvId}
-          onSelect={(id) => openConversation(id)}
-          onNew={newChat}
-          onDelete={onDeleteConv}
-          loading={convLoading}
-          open={sidebarOpen}
-          onClose={() => setSidebarOpen(false)}
-        />
-      )}
+    <main className="ai-shell with-side">
+      <Sidebar
+        conversations={conversations}
+        activeId={activeConvId}
+        onSelect={(id) => openConversation(id)}
+        onNew={newChat}
+        onDelete={onDeleteConv}
+        loading={convLoading}
+        open={sidebarOpen}
+        onClose={() => setSidebarOpen(false)}
+      />
 
       <section className="ai-main">
         {/* 헤더: 페르소나 전환 + 새 대화 */}
         <div className="ai-chat-header">
-          {user && (
-            <button className="ai-icon-btn ai-side-toggle" onClick={() => setSidebarOpen(true)} aria-label="대화 기록">
-              <I.History width={19} height={19} />
-            </button>
-          )}
+          <button className="ai-icon-btn ai-side-toggle" onClick={() => setSidebarOpen(true)} aria-label="대화 기록">
+            <I.History width={19} height={19} />
+          </button>
           <div className="ai-persona-bar">
-            {PERSONAS.map(p => (
+            {allPersonas.map(p => (
               <button
                 key={p.id}
                 className={`ai-persona-pill ${persona === p.id ? 'active' : ''}`}
@@ -308,6 +353,9 @@ export default function ChatPage() {
                 {p.name}
               </button>
             ))}
+            <button className="ai-persona-pill ai-persona-add" onClick={() => setShowCreate(true)} title="새 페르소나 만들기">
+              <I.Plus width={13} height={13} /> 만들기
+            </button>
           </div>
           <div style={{ flex: 1 }} />
           {messages.length > 0 && (
@@ -320,7 +368,14 @@ export default function ChatPage() {
         {/* 본문 */}
         <div className="ai-scroll" ref={scrollRef}>
           {messages.length === 0 ? (
-            <PersonaPicker selected={persona} onSelect={choosePersona} onSample={handleSend} />
+            <PersonaPicker
+              selected={persona}
+              onSelect={choosePersona}
+              onSample={handleSend}
+              customPersonas={customPersonas}
+              onCreate={() => setShowCreate(true)}
+              onDelete={removeCustomPersona}
+            />
           ) : (
             <div className="ai-thread">
               {messages.map((m, i) => (
@@ -335,11 +390,6 @@ export default function ChatPage() {
                   onSpeak={() => toggleSpeak(i, m.content)}
                 />
               ))}
-              {!user && (
-                <div className="ai-guest-note">
-                  <I.Login width={14} height={14} /> 로그인하면 이 대화가 저장되어 나중에 다시 볼 수 있어요.
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -375,6 +425,33 @@ export default function ChatPage() {
           />
         </div>
       </section>
+
+      {/* 새 페르소나 만들기 모달 */}
+      {showCreate && (
+        <div className="bj-modal-overlay" onClick={() => setShowCreate(false)}>
+          <div className="bj-modal" onClick={e => e.stopPropagation()}>
+            <div className="bj-modal-title">새 페르소나 만들기</div>
+            <div className="bj-modal-body" style={{ marginBottom: 14 }}>
+              이름만 적어도 돼요. 그 인물/캐릭터의 말투로 대화합니다. (예: <strong>마이클 잭슨</strong>)
+            </div>
+            <div className="bj-field">
+              <label>이름</label>
+              <input value={cpName} onChange={e => setCpName(e.target.value)} maxLength={60}
+                placeholder="예: 마이클 잭슨, 셰익스피어, 츤데레 비서…"
+                onKeyDown={e => e.key === 'Enter' && createPersona()} autoFocus />
+            </div>
+            <div className="bj-field">
+              <label>말투 / 설정 <span style={{ color: 'var(--muted)', fontWeight: 400 }}>(선택)</span></label>
+              <textarea value={cpInstr} onChange={e => setCpInstr(e.target.value)} rows={3} maxLength={1000}
+                placeholder="예: 팝의 황제처럼 자신감 있게, 가끔 '히히' 추임새를 넣어줘" />
+            </div>
+            <div className="bj-modal-actions">
+              <button className="bj-btn" onClick={() => setShowCreate(false)}>취소</button>
+              <button className="bj-btn bj-btn-primary" onClick={createPersona} disabled={!cpName.trim()}>만들기</button>
+            </div>
+          </div>
+        </div>
+      )}
     </main>
   );
 }

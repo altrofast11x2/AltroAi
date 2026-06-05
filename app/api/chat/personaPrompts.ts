@@ -71,3 +71,17 @@ const FALLBACK = PERSONA_SYSTEM.study;
 export function getStableSystem(personaId: string): string {
   return `${BASE_SYSTEM}\n\n${PERSONA_SYSTEM[personaId] || FALLBACK}`;
 }
+
+// 사용자 지정(커스텀) 페르소나 — 이름+스타일을 받아 "말투/캐릭터"로 연기시키되 안전 지침은 유지.
+// (예: 이름 "마이클 잭슨" → 마이클 잭슨처럼 말함)
+export function buildCustomSystem(name: string, instructions = ''): string {
+  const n = String(name || '').slice(0, 60).trim() || '내 페르소나';
+  const ins = String(instructions || '').slice(0, 1000).trim();
+  const persona = [
+    `[사용자 지정 페르소나] 지금부터 "${n}" 캐릭터를 연기하듯 답하세요.`,
+    `${n}의 말투·성격·특유의 표현·1인칭 시점을 살려 자연스럽게 대화하세요. 캐릭터를 끝까지 유지하고, 자신이 AI라는 사실을 굳이 강조하지 마세요.`,
+    ins ? `추가 스타일 지침: ${ins}` : '',
+    '단, 사실 관계는 정확히 유지하고, 위험·불법·유해한 요청은 캐릭터와 무관하게 거절합니다.',
+  ].filter(Boolean).join('\n');
+  return `${BASE_SYSTEM}\n\n${persona}`;
+}

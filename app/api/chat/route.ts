@@ -13,7 +13,7 @@
 //   · 입력 검증 + 간단한 IP 레이트리밋.
 // ───────────────────────────────────────────────────────────────────────────
 import Anthropic from '@anthropic-ai/sdk';
-import { getStableSystem, KNOWLEDGE_INSTRUCTION, OWNER_SYSTEM, VISITOR_GUARD } from './personaPrompts';
+import { getStableSystem, buildCustomSystem, KNOWLEDGE_INSTRUCTION, OWNER_SYSTEM, VISITOR_GUARD } from './personaPrompts';
 import { retrieve, formatKnowledge, docsByIds } from '@/lib/rag';
 
 export const runtime = 'nodejs';
@@ -138,8 +138,11 @@ export async function POST(req: Request) {
     return jsonError('보낼 메시지가 없습니다.', 400);
   }
 
-  // 주인장 식별 — 이메일 일치(+OWNER_SECRET 설정 시 코드까지). 그 외엔 방문자 보안 필터 적용.
+  // 로그인 필수 — 비로그인(이메일 없음) 요청은 거부 (서버 측 강제)
   const email = String(body?.email || '').trim().toLowerCase();
+  if (!email) return jsonError('로그인이 필요합니다. 로그인 후 이용해 주세요.', 401);
+
+  // 주인장 식별 — 이메일 일치(+OWNER_SECRET 설정 시 코드까지). 그 외엔 방문자 보안 필터 적용.
   const ownerSecret = typeof body?.ownerSecret === 'string' ? body.ownerSecret : '';
   const isOwner = !!OWNER_EMAIL && email === OWNER_EMAIL && (OWNER_SECRET ? ownerSecret === OWNER_SECRET : true);
   const accessGuard = isOwner ? OWNER_SYSTEM : VISITOR_GUARD;
@@ -150,7 +153,11 @@ export async function POST(req: Request) {
   if (personaId === 'portfolio' && hits.length === 0) hits = docsByIds(['owner', 'altro-series']);
   const knowledgeText = formatKnowledge(hits);
 
-  const stable = getStableSystem(personaId);
+  // 커스텀 페르소나가 오면 그걸로, 아니면 내장 페르소나
+  const cp = body?.customPersona;
+  const stable = (cp && typeof cp.name === 'string' && cp.name.trim())
+    ? buildCustomSystem(cp.name, typeof cp.instructions === 'string' ? cp.instructions : '')
+    : getStableSystem(personaId);
   const knowledgeBlock = knowledgeText ? `${KNOWLEDGE_INSTRUCTION}\n\n${knowledgeText}` : '';
 
   if (provider === 'claude') return streamClaude(stable, accessGuard, knowledgeBlock, messages);

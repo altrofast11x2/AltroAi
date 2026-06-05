@@ -124,8 +124,9 @@ img { display: block; max-width: 100%; }
 .bj-tab.active { color: var(--text); border-bottom-color: var(--accent); font-weight: 700; }
 .bj-field { margin-bottom: 14px; }
 .bj-field label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--text); }
-.bj-field input { width: 100%; background: var(--surface2); border: 1px solid transparent; border-radius: 10px; padding: 12px 14px; font-family: var(--font); font-size: 14px; color: var(--text); outline: none; transition: all 0.15s; }
-.bj-field input:focus { background: var(--bg); border-color: var(--accent); }
+.bj-field input, .bj-field textarea { width: 100%; background: var(--surface2); border: 1px solid transparent; border-radius: 10px; padding: 12px 14px; font-family: var(--font); font-size: 14px; color: var(--text); outline: none; transition: all 0.15s; }
+.bj-field textarea { resize: vertical; min-height: 70px; line-height: 1.5; }
+.bj-field input:focus, .bj-field textarea:focus { background: var(--bg); border-color: var(--accent); }
 
 .bj-btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 12px 20px; font-size: 14px; font-weight: 600; border: 1px solid var(--border-dark); background: var(--surface); color: var(--text); border-radius: 10px; transition: all 0.15s; font-family: var(--font); }
 .bj-btn:hover { background: var(--surface2); }
@@ -279,9 +280,21 @@ img { display: block; max-width: 100%; }
 .ai-welcome-title { font-family: var(--serif); font-size: 30px; margin-top: 14px; letter-spacing: -0.02em; }
 .ai-welcome-sub { color: var(--muted); margin-top: 6px; font-size: 14px; }
 .ai-persona-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 12px; margin-bottom: 26px; }
-.ai-persona-card { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 16px; border: 1.5px solid var(--border); border-radius: 14px; background: var(--surface); text-align: left; transition: all 0.15s; }
+.ai-persona-card { position: relative; display: flex; flex-direction: column; align-items: flex-start; gap: 7px; padding: 16px; border: 1.5px solid var(--border); border-radius: 14px; background: var(--surface); text-align: left; transition: all 0.15s; cursor: pointer; }
 .ai-persona-card:hover { border-color: var(--border-dark); transform: translateY(-1px); }
 .ai-persona-card.active { box-shadow: 0 6px 20px -12px var(--shadow-strong); }
+.ai-persona-card-add { border-style: dashed; }
+.ai-persona-ico-add { background: var(--surface2) !important; color: var(--muted); }
+.ai-persona-del-card { position: absolute; top: 8px; right: 8px; width: 26px; height: 26px; border: none; background: var(--surface2); color: var(--muted); border-radius: 8px; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.12s; }
+.ai-persona-card:hover .ai-persona-del-card { opacity: 1; }
+.ai-persona-del-card:hover { background: var(--accent-soft); color: var(--accent); }
+/* "만들기" pill */
+.ai-persona-add { display: inline-flex; align-items: center; gap: 4px; border-style: dashed; color: var(--muted); }
+.ai-persona-add:hover { color: var(--accent); border-color: var(--accent); }
+/* 로그인 게이트 */
+.ai-gate-actions { display: flex; justify-content: center; margin-top: 4px; }
+.ai-gate-features { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px 18px; margin-top: 26px; font-size: 12.5px; color: var(--muted); }
+.ai-gate-features span { display: inline-flex; align-items: center; gap: 6px; }
 .ai-persona-ico { width: 40px; height: 40px; border-radius: 12px; color: #fff; display: flex; align-items: center; justify-content: center; }
 .ai-persona-name { font-weight: 800; font-size: 15px; }
 .ai-persona-tag { font-size: 12px; color: var(--muted); line-height: 1.4; }
